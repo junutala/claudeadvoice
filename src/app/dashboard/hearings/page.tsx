@@ -2,7 +2,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import HearingsClient from './HearingsClient'
 
 export default async function HearingsPage() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', session!.user.id).single()
 

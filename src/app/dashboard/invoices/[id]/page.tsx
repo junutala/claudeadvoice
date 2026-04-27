@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import InvoiceDetailClient from './InvoiceDetailClient'
 
 export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data: { session } } = await supabase.auth.getSession()
   const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', session!.user.id).single()
 
