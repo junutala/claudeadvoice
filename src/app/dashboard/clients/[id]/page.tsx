@@ -1,8 +1,10 @@
-// v5 - sequential fetches, no Promise.all
+// v6 - includes contacts and plans
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import ClientDetailClient from './ClientDetailClient'
+
+type PageProps = { params: Promise<{ id: string }> }
 
 async function getClientPageData(tenantId: string, clientId: string) {
   const db = await createServerClient()
@@ -34,6 +36,16 @@ async function getClientPageData(tenantId: string, clientId: string) {
     .eq('client_id', clientId).eq('tenant_id', tenantId)
     .order('expense_date', { ascending: false })
 
+  const { data: contactList } = await db
+    .from('client_contacts').select('*')
+    .eq('client_id', clientId)
+    .order('is_primary', { ascending: false })
+
+  const { data: planList } = await db
+    .from('plans').select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+
   const ids: string[] = (caseList ?? []).map((c: { id: string }) => c.id)
   const today = new Date().toISOString().split('T')[0]
 
@@ -54,14 +66,12 @@ async function getClientPageData(tenantId: string, clientId: string) {
     receipts: receiptList ?? [],
     expenses: expenseList ?? [],
     hearings: hearingList ?? [],
+    contacts: contactList ?? [],
+    plans:    planList    ?? [],
   }
 }
 
-export default async function ClientDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+export default async function ClientDetailPage({ params }: PageProps) {
   const { id } = await params
   const supabase = await createServerClient()
   const { data: { session } } = await supabase.auth.getSession()
@@ -70,18 +80,20 @@ export default async function ClientDetailPage({
     .eq('id', session!.user.id).single()
 
   const tenantId: string = profile?.tenant_id ?? ''
-  const pageData = await getClientPageData(tenantId, id)
+  const data = await getClientPageData(tenantId, id)
 
-  if (!pageData.client) notFound()
+  if (!data.client) notFound()
 
   return (
     <ClientDetailClient
-      client={pageData.client}
-      cases={pageData.cases}
-      invoices={pageData.invoices}
-      receipts={pageData.receipts}
-      expenses={pageData.expenses}
-      hearings={pageData.hearings}
+      client={data.client}
+      cases={data.cases}
+      invoices={data.invoices}
+      receipts={data.receipts}
+      expenses={data.expenses}
+      hearings={data.hearings}
+      contacts={data.contacts}
+      plans={data.plans}
       tenantId={tenantId}
     />
   )
