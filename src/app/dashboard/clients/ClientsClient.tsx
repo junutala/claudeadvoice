@@ -168,7 +168,7 @@ export default function ClientsClient({ clients: initial, tenantId }: { clients:
                     {formatCurrency(c.outstanding)}
                   </span>
                 </Td>
-                <Td><Button size="sm" onClick={e => { e.stopPropagation(); router.push(`/dashboard/clients/${c.id}`) }}>View</Button></Td>
+                <Td><Button size="sm" onClick={(e: React.MouseEvent) => { e.stopPropagation(); router.push(`/dashboard/clients/${c.id}`) }}>View</Button></Td>
               </Tr>
             ))}
           </Table>
