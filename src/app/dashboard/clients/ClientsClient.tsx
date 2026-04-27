@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -168,7 +169,7 @@ export default function ClientsClient({ clients: initial, tenantId }: { clients:
                     {formatCurrency(c.outstanding)}
                   </span>
                 </Td>
-                <Td><Button size="sm" onClick={(e: React.MouseEvent) => { e.stopPropagation(); router.push(`/dashboard/clients/${c.id}`) }}>View</Button></Td>
+                <Td><Link href={`/dashboard/clients/${c.id}`} onClick={e => e.stopPropagation()}><Button size="sm">View</Button></Link></Td>
               </Tr>
             ))}
           </Table>
