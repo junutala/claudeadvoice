@@ -9,38 +9,51 @@ import {
   Tabs, Badge, Modal, FormGroup, Input, Select, Textarea, HearingChip
 } from '@/components/ui'
 
+interface HearingFormData {
+  case_id: string
+  hearing_date: string
+  court_hall: string
+  item_no: string
+  judge_name: string
+  purpose: string
+  notes: string
+  source: string
+}
+
 export default function HearingsClient({ upcoming, past, cases, tenantId }: {
   upcoming: any[]; past: any[]; cases: any[]; tenantId: string
 }) {
-  const [tab, setTab]     = useState('Upcoming')
-  const [modal, setModal] = useState(false)
+  const [tab, setTab]       = useState('Upcoming')
+  const [modal, setModal]   = useState(false)
   const [saving, setSaving] = useState(false)
-  const router = useRouter()
+  const router  = useRouter()
   const supabase = createClient()
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
-    defaultValues: { hearing_date: new Date().toISOString().split('T')[0], source: 'manual' },
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<HearingFormData>({
+    defaultValues: {
+      case_id: '', hearing_date: new Date().toISOString().split('T')[0],
+      court_hall: '', item_no: '', judge_name: '', purpose: '', notes: '', source: 'manual',
+    },
   })
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: HearingFormData) => {
     setSaving(true)
     const { data: { session } } = await supabase.auth.getSession()
     const { data: profile } = await supabase.from('profiles').select('id').eq('id', session!.user.id).single()
 
     await supabase.from('hearings').insert({
       tenant_id: tenantId,
-      case_id: data.case_id,
+      case_id:      data.case_id,
       hearing_date: data.hearing_date,
-      court_hall: data.court_hall,
-      item_no: data.item_no ? parseInt(data.item_no) : null,
-      judge_name: data.judge_name,
-      purpose: data.purpose,
-      notes: data.notes,
+      court_hall:   data.court_hall   || null,
+      item_no:      data.item_no      ? parseInt(data.item_no) : null,
+      judge_name:   data.judge_name   || null,
+      purpose:      data.purpose      || null,
+      notes:        data.notes        || null,
       source: 'manual',
       created_by: profile?.id,
     })
 
-    // Update case next_hearing
     await supabase.from('cases').update({ next_hearing: data.hearing_date }).eq('id', data.case_id)
 
     setSaving(false)
@@ -65,8 +78,8 @@ export default function HearingsClient({ upcoming, past, cases, tenantId }: {
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <HearingChip date={formatDate(h.hearing_date)} />
               {h.court_hall && <span className="text-[10px] text-gray-500">Hall: {h.court_hall}</span>}
-              {h.item_no && <Badge variant="neutral">Item #{h.item_no}</Badge>}
-              {h.purpose && <Badge variant="info">{h.purpose}</Badge>}
+              {h.item_no    && <Badge variant="neutral">Item #{h.item_no}</Badge>}
+              {h.purpose    && <Badge variant="info">{h.purpose}</Badge>}
             </div>
           </div>
           <div className="text-right flex-shrink-0">
@@ -122,26 +135,26 @@ export default function HearingsClient({ upcoming, past, cases, tenantId }: {
         </div>
       ) : (
         <Card>
-          {past.length === 0 ? (
-            <CardBody><p className="text-center text-xs text-gray-400 py-6">No past hearings</p></CardBody>
-          ) : past.map(h => (
-            <div key={h.id} className="px-4 py-3 border-b border-gray-100 last:border-0 opacity-70">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-gray-900">{h.case?.title}</p>
-                  <p className="text-[10px] text-gray-500">{h.case?.case_number} · {formatDate(h.hearing_date)}</p>
-                </div>
-                <div className="flex gap-2">
-                  {h.outcome && <Badge variant="neutral">{h.outcome}</Badge>}
-                  {h.next_date && <HearingChip date={formatDate(h.next_date)} />}
+          {past.length === 0
+            ? <CardBody><p className="text-center text-xs text-gray-400 py-6">No past hearings</p></CardBody>
+            : past.map(h => (
+              <div key={h.id} className="px-4 py-3 border-b border-gray-100 last:border-0 opacity-70">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-900">{h.case?.title}</p>
+                    <p className="text-[10px] text-gray-500">{h.case?.case_number} · {formatDate(h.hearing_date)}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    {h.outcome  && <Badge variant="neutral">{h.outcome}</Badge>}
+                    {h.next_date && <HearingChip date={formatDate(h.next_date)} />}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          }
         </Card>
       )}
 
-      {/* Add Hearing Modal */}
       <Modal open={modal} onClose={() => { setModal(false); reset() }} title="Add Hearing Date"
         footer={<>
           <Button onClick={() => { setModal(false); reset() }}>Cancel</Button>
@@ -154,7 +167,11 @@ export default function HearingsClient({ upcoming, past, cases, tenantId }: {
           <FormGroup label="Case / Matter" required error={errors.case_id?.message}>
             <Select {...register('case_id', { required: 'Required' })}>
               <option value="">— Select case —</option>
-              {cases.map(c => <option key={c.id} value={c.id}>{c.case_number ? `${c.case_number} · ` : ''}{c.title} ({(c.client as any)?.name})</option>)}
+              {cases.map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.case_number ? `${c.case_number} · ` : ''}{c.title} ({(c.client as any)?.name})
+                </option>
+              ))}
             </Select>
           </FormGroup>
           <div className="grid grid-cols-2 gap-3">
@@ -170,7 +187,9 @@ export default function HearingsClient({ upcoming, past, cases, tenantId }: {
             <FormGroup label="Purpose">
               <Select {...register('purpose')}>
                 <option value="">— Select —</option>
-                {['Admission','Hearing','Arguments','Orders','Filing','Counter','Rejoinder','Judgment'].map(p => <option key={p} value={p}>{p}</option>)}
+                {['Admission','Hearing','Arguments','Orders','Filing','Counter','Rejoinder','Judgment'].map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
               </Select>
             </FormGroup>
           </div>

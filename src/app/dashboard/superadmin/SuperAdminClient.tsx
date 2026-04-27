@@ -6,8 +6,19 @@ import { useForm } from 'react-hook-form'
 import { formatDate, COURTS } from '@/lib/utils'
 import {
   PageHeader, SearchInput, Button, Card, CardHeader, CardTitle, CardBody,
-  StatCard, Table, Tr, Td, Badge, Tabs, Modal, FormGroup, Input, Select, Textarea
+  StatCard, Table, Tr, Td, Badge, Tabs, Modal, FormGroup, Input, Select
 } from '@/components/ui'
+
+interface TenantFormData {
+  name: string
+  firm_name: string
+  email: string
+  phone: string
+  bar_council_no: string
+  primary_court: string
+  plan: string
+  max_users: number
+}
 
 const PLAN_OPTIONS = [
   { value: 'trial',        label: 'Trial (1 user, Free)',               maxUsers: 1  },
@@ -16,23 +27,23 @@ const PLAN_OPTIONS = [
   { value: 'enterprise',   label: 'Enterprise (10 users, ₹4,999/mo)',   maxUsers: 10 },
 ]
 
-const PLAN_BADGES: Record<string, string> = {
-  trial: 'neutral', starter: 'info', professional: 'gold', enterprise: 'success'
+const PLAN_BADGES: Record<string, 'neutral' | 'info' | 'gold' | 'success'> = {
+  trial: 'neutral', starter: 'info', professional: 'gold', enterprise: 'success',
 }
 
 export default function SuperAdminClient({ tenants: initial, allProfiles }: {
   tenants: any[]; allProfiles: any[]
 }) {
-  const [tenants, setTenants] = useState(initial)
-  const [search, setSearch]   = useState('')
-  const [tab, setTab]         = useState('Tenants')
-  const [modal, setModal]     = useState(false)
+  const [tenants, setTenants]     = useState(initial)
+  const [search, setSearch]       = useState('')
+  const [tab, setTab]             = useState('Tenants')
+  const [modal, setModal]         = useState(false)
   const [manageModal, setManageModal] = useState<any>(null)
-  const [saving, setSaving]   = useState(false)
-  const router = useRouter()
+  const [saving, setSaving]       = useState(false)
+  const router   = useRouter()
   const supabase = createClient()
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<TenantFormData>({
     defaultValues: { plan: 'starter', max_users: 2, primary_court: 'Madras High Court' },
   })
 
@@ -41,41 +52,39 @@ export default function SuperAdminClient({ tenants: initial, allProfiles }: {
   const filteredTenants = tenants.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
     t.email.toLowerCase().includes(search.toLowerCase()) ||
-    t.bar_council_no?.toLowerCase().includes(search.toLowerCase())
+    (t.bar_council_no ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const totalMRR = tenants.filter(t => t.is_active && t.plan !== 'trial').reduce((s, t) => {
-    const prices: Record<string, number> = { starter: 999, professional: 2499, enterprise: 4999 }
-    return s + (prices[t.plan] || 0)
-  }, 0)
+  const totalMRR = tenants
+    .filter(t => t.is_active && t.plan !== 'trial')
+    .reduce((s, t) => {
+      const prices: Record<string, number> = { starter: 999, professional: 2499, enterprise: 4999 }
+      return s + (prices[t.plan] || 0)
+    }, 0)
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: TenantFormData) => {
     setSaving(true)
-    // 1. Create the tenant
-    const { data: tenant, error: tErr } = await supabase.from('tenants').insert({
-      name: data.name, firm_name: data.firm_name, bar_council_no: data.bar_council_no,
-      email: data.email, phone: data.phone, primary_court: data.primary_court,
-      plan: data.plan, max_users: parseInt(data.max_users),
-      trial_ends_at: data.plan === 'trial' ? new Date(Date.now() + 14 * 86400000).toISOString() : null,
-      is_active: true,
-    }).select().single()
+    const { data: { session } } = await supabase.auth.getSession()
+    const { data: profile } = await supabase.from('profiles').select('id').eq('id', session!.user.id).single()
 
-    if (!tErr && tenant) {
-      // 2. Create auth user (in real app: send invite email)
-      const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
-        email: data.email,
-        password: Math.random().toString(36).slice(-10),
-        email_confirm: true,
-        user_metadata: { full_name: data.name, role: 'owner' },
-      })
-
-      if (!authErr && authData?.user) {
-        await supabase.from('profiles').update({ tenant_id: tenant.id, role: 'owner' }).eq('id', authData.user.id)
-      }
-    }
+    await supabase.from('tenants').insert({
+      name:           data.name,
+      firm_name:      data.firm_name     || null,
+      bar_council_no: data.bar_council_no || null,
+      email:          data.email,
+      phone:          data.phone         || null,
+      primary_court:  data.primary_court,
+      plan:           data.plan,
+      max_users:      Number(data.max_users),
+      trial_ends_at:  data.plan === 'trial' ? new Date(Date.now() + 14 * 86400000).toISOString() : null,
+      is_active:      true,
+      onboarded_by:   profile?.id,
+    })
 
     setSaving(false)
-    if (!tErr) { reset(); setModal(false); router.refresh() }
+    reset()
+    setModal(false)
+    router.refresh()
   }
 
   const handleToggleActive = async (tenant: any) => {
@@ -84,7 +93,7 @@ export default function SuperAdminClient({ tenants: initial, allProfiles }: {
   }
 
   const handleUpdatePlan = async (tenantId: string, plan: string) => {
-    const maxUsers = PLAN_OPTIONS.find(p => p.value === plan)?.maxUsers || 2
+    const maxUsers = PLAN_OPTIONS.find(p => p.value === plan)?.maxUsers ?? 2
     await supabase.from('tenants').update({ plan, max_users: maxUsers }).eq('id', tenantId)
     setManageModal(null)
     router.refresh()
@@ -98,12 +107,11 @@ export default function SuperAdminClient({ tenants: initial, allProfiles }: {
         actions={<Button variant="primary" onClick={() => setModal(true)}>+ Onboard Advocate</Button>}
       />
 
-      {/* Platform stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <StatCard label="Total Tenants" value={String(tenants.length)} sub="All advocates" />
-        <StatCard label="Active" value={String(tenants.filter(t => t.is_active).length)} sub="Subscribed" trend="up" />
-        <StatCard label="Total Users" value={String(allProfiles.length)} sub="Across all tenants" />
-        <StatCard label="MRR" value={`₹${totalMRR.toLocaleString('en-IN')}`} sub="Monthly recurring" trend="up" />
+        <StatCard label="Total Tenants"       value={String(tenants.length)}                                        sub="All advocates" />
+        <StatCard label="Active"              value={String(tenants.filter(t => t.is_active).length)}               sub="Subscribed" trend="up" />
+        <StatCard label="Total Users"         value={String(allProfiles.length)}                                    sub="Across all tenants" />
+        <StatCard label="MRR"                 value={`₹${totalMRR.toLocaleString('en-IN')}`}                       sub="Monthly recurring" trend="up" />
       </div>
 
       <Tabs tabs={['Tenants','Users']} active={tab} onChange={setTab} />
@@ -123,16 +131,12 @@ export default function SuperAdminClient({ tenants: initial, allProfiles }: {
                   </Td>
                   <Td className="text-xs">{t.bar_council_no || '—'}</Td>
                   <Td className="text-xs text-gray-600 max-w-[100px] truncate">{t.primary_court}</Td>
-                  <Td>
-                    <Badge variant={PLAN_BADGES[t.plan] as any || 'neutral'}>{t.plan}</Badge>
-                  </Td>
+                  <Td><Badge variant={PLAN_BADGES[t.plan] ?? 'neutral'}>{t.plan}</Badge></Td>
                   <Td className="text-xs">{t.user_count} / {t.max_users}</Td>
                   <Td className="text-xs text-gray-500">{formatDate(t.created_at)}</Td>
                   <Td>
-                    {!t.is_active
-                      ? <Badge variant="danger">Inactive</Badge>
-                      : t.plan === 'trial'
-                      ? <Badge variant="warn">Trial</Badge>
+                    {!t.is_active     ? <Badge variant="danger">Inactive</Badge>
+                      : t.plan === 'trial' ? <Badge variant="warn">Trial</Badge>
                       : <Badge variant="success">Active</Badge>}
                   </Td>
                   <Td>
@@ -177,13 +181,13 @@ export default function SuperAdminClient({ tenants: initial, allProfiles }: {
         <form className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <FormGroup label="Advocate Name" required error={errors.name?.message}>
-              <Input {...register('name', { required: true })} placeholder="Full name" />
+              <Input {...register('name', { required: 'Required' })} placeholder="Full name" />
             </FormGroup>
             <FormGroup label="Firm Name (optional)">
               <Input {...register('firm_name')} placeholder="M/s XYZ Law Associates" />
             </FormGroup>
             <FormGroup label="Email (login)" required error={errors.email?.message}>
-              <Input {...register('email', { required: true })} type="email" placeholder="advocate@email.com" />
+              <Input {...register('email', { required: 'Required' })} type="email" placeholder="advocate@email.com" />
             </FormGroup>
             <FormGroup label="Phone">
               <Input {...register('phone')} placeholder="+91 XXXXX XXXXX" />
@@ -199,7 +203,7 @@ export default function SuperAdminClient({ tenants: initial, allProfiles }: {
             <FormGroup label="Subscription Plan">
               <Select {...register('plan')} onChange={e => {
                 const p = PLAN_OPTIONS.find(x => x.value === e.target.value)
-                setValue('max_users', p?.maxUsers || 2)
+                setValue('max_users', p?.maxUsers ?? 2)
               }}>
                 {PLAN_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </Select>
@@ -208,7 +212,6 @@ export default function SuperAdminClient({ tenants: initial, allProfiles }: {
               <Input {...register('max_users')} type="number" min={1} max={50} />
             </FormGroup>
           </div>
-
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700">
             An invitation email will be sent to the advocate with temporary login credentials.
             {watchPlan === 'trial' && ' They will have a 14-day free trial.'}
@@ -216,26 +219,30 @@ export default function SuperAdminClient({ tenants: initial, allProfiles }: {
         </form>
       </Modal>
 
-      {/* Manage Tenant Modal */}
+      {/* Manage Modal */}
       {manageModal && (
-        <Modal open={!!manageModal} onClose={() => setManageModal(null)} title={`Manage — ${manageModal.firm_name || manageModal.name}`}
+        <Modal open={!!manageModal} onClose={() => setManageModal(null)}
+          title={`Manage — ${manageModal.firm_name || manageModal.name}`}
           footer={<Button onClick={() => setManageModal(null)}>Close</Button>}
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 text-xs">
-              {[
-                ['Email', manageModal.email], ['Phone', manageModal.phone || '—'],
-                ['Bar No.', manageModal.bar_council_no || '—'], ['Court', manageModal.primary_court],
-                ['Plan', manageModal.plan], ['Users', `${manageModal.user_count} / ${manageModal.max_users}`],
-                ['Joined', formatDate(manageModal.created_at)], ['Status', manageModal.is_active ? 'Active' : 'Suspended'],
-              ].map(([label, value]) => (
+              {([
+                ['Email',   manageModal.email],
+                ['Phone',   manageModal.phone || '—'],
+                ['Bar No.', manageModal.bar_council_no || '—'],
+                ['Court',   manageModal.primary_court],
+                ['Plan',    manageModal.plan],
+                ['Users',   `${manageModal.user_count} / ${manageModal.max_users}`],
+                ['Joined',  formatDate(manageModal.created_at)],
+                ['Status',  manageModal.is_active ? 'Active' : 'Suspended'],
+              ] as [string, string][]).map(([label, value]) => (
                 <div key={label}>
                   <p className="text-gray-500">{label}</p>
                   <p className="font-medium text-gray-900">{value}</p>
                 </div>
               ))}
             </div>
-
             <div className="border-t border-gray-200 pt-3">
               <p className="text-xs font-semibold text-gray-700 mb-2">Change Plan</p>
               <div className="flex gap-2 flex-wrap">
@@ -247,13 +254,6 @@ export default function SuperAdminClient({ tenants: initial, allProfiles }: {
                   </Button>
                 ))}
               </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-3">
-              <p className="text-xs font-semibold text-gray-700 mb-2">Bank Details on File</p>
-              {manageModal.bank_account ? (
-                <p className="text-xs text-gray-600">{manageModal.bank_name} · {manageModal.bank_account} · {manageModal.bank_ifsc}</p>
-              ) : <p className="text-xs text-gray-400">Not configured</p>}
             </div>
           </div>
         </Modal>
