@@ -1,9 +1,9 @@
+// v5 - sequential fetches, no Promise.all
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import ClientDetailClient from './ClientDetailClient'
 
-// Fetch all client data sequentially to avoid circular type inference
 async function getClientPageData(tenantId: string, clientId: string) {
   const db = await createServerClient()
 
