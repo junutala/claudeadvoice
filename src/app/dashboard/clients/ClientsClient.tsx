@@ -288,7 +288,7 @@ export default function ClientsClient({ clients: initial, tenantId }: { clients:
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <FormGroup label="Case Title" required error={(errors.cases?.[idx]?.title)?.message}>
-                    <Input {...register(`cases.${idx}.title`, { required: idx === 0 ? 'Required' : false })}
+                    <Input {...register(`cases.${idx}.title`)}
                       placeholder="Petitioner v. Respondent" />
                   </FormGroup>
                   <FormGroup label="Case Number">
