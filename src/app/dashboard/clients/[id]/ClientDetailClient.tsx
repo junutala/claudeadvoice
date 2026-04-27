@@ -400,10 +400,10 @@ export default function ClientDetailClient({ client, cases, invoices, receipts, 
                 <FormGroup label="Client / Firm Name" required>
                   <Input {...accountForm.register('name', { required: true })} />
                 </FormGroup>
-                <FormGroup label="Email" error={accountForm.formState.errors.email?.message}>
+                <FormGroup label="Email" error={accountForm.formState.errors.email?.message as string}>
                   <Input {...accountForm.register('email', { validate: v => !v || EMAIL_RE.test(v) || 'Invalid email' })} type="email" />
                 </FormGroup>
-                <FormGroup label="Phone" error={accountForm.formState.errors.phone?.message}>
+                <FormGroup label="Phone" error={accountForm.formState.errors.phone?.message as string}>
                   <Input {...accountForm.register('phone', { validate: v => !v || PHONE_RE.test(v.replace(/\s/g,'')) || 'Enter valid 10-digit mobile' })} />
                 </FormGroup>
                 <FormGroup label="PAN">

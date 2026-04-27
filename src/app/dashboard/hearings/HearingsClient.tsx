@@ -66,7 +66,7 @@ export default function HearingsClient({ upcoming, past, cases, tenantId }: {
   const nextMonth = upcoming.filter(h => daysDiff(h.hearing_date) > 7 && daysDiff(h.hearing_date) <= 30)
   const later     = upcoming.filter(h => daysDiff(h.hearing_date) > 30)
 
-  const HearingCard = ({ h }: { h: any }) => {
+  const HearingCard = ({ h, ...rest }: { h: any; [key: string]: any }) => {
     const diff = daysDiff(h.hearing_date)
     return (
       <div className="px-4 py-3 border-b border-gray-100 last:border-0">
