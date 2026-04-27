@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase/server'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { StatCard, Card, CardHeader, CardTitle, CardBody, StatusBadge, HearingChip } from '@/components/ui'
