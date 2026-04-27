@@ -55,11 +55,23 @@ export default function ClientsClient({ clients: initial, tenantId }: { clients:
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { setSaveError('Not logged in'); setSaving(false); return }
-      const { data: profile } = await supabase.from('profiles').select('id,tenant_id').eq('id', session.user.id).single()
+      
+      // Get profile with tenant_id
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles').select('id,tenant_id').eq('id', session.user.id).single()
+      
+      // Use tenantId prop as fallback if profile fetch fails
+      const resolvedTenantId = profile?.tenant_id ?? tenantId
+      
+      if (!resolvedTenantId) {
+        setSaveError('Could not determine tenant. Please log out and log in again.')
+        setSaving(false)
+        return
+      }
 
       // Insert client
       const { data: client, error: clientErr } = await supabase.from('clients').insert({
-        tenant_id: profile?.tenant_id ?? tenantId,
+        tenant_id: resolvedTenantId,
         name: data.name,
         email: data.email || null,
         phone: data.phone || null,
@@ -84,7 +96,7 @@ export default function ClientsClient({ clients: initial, tenantId }: { clients:
       if (validContacts.length > 0) {
         await supabase.from('client_contacts').insert(
           validContacts.map((c, i) => ({
-            tenant_id: profile?.tenant_id ?? tenantId,
+            tenant_id: resolvedTenantId,
             client_id: client.id,
             name: c.name,
             designation: c.designation || null,
@@ -100,7 +112,7 @@ export default function ClientsClient({ clients: initial, tenantId }: { clients:
       if (validCases.length > 0) {
         await supabase.from('cases').insert(
           validCases.map(c => ({
-            tenant_id: profile?.tenant_id ?? tenantId,
+            tenant_id: resolvedTenantId,
             client_id: client.id,
             title: c.title,
             case_number: c.case_number || null,
